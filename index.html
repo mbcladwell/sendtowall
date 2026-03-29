@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>X Article Fetcher</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f4f4f5;
+      color: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 2rem;
+      width: min(480px, 90vw);
+      box-shadow: 0 4px 20px rgba(0,0,0,.08);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    h1 { font-size: 1.2rem; }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+    }
+
+    input[type="url"] {
+      width: 100%;
+      padding: .6rem .75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input[type="url"]:focus { border-color: #6366f1; }
+
+    button {
+      padding: .65rem;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    button:hover   { background: #4f46e5; }
+    button:active  { background: #4338ca; }
+    button:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    .hint { font-size: .8rem; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>X Article Fetcher</h1>
+    <form method="POST" action="fetch_article.php"
+          onsubmit="this.querySelector('button').disabled=true;
+                    this.querySelector('button').textContent='Fetching…';">
+      <input
+        type="url"
+        name="url"
+        placeholder="https://x.com/user/article/…"
+        required
+        autofocus
+      >
+      <button type="submit">Fetch Article</button>
+    </form>
+    <p class="hint">Paste an x.com article URL and hit Fetch.</p>
+  </div>
+</body>
+</html>

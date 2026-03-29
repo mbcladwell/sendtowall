@@ -1,0 +1,24 @@
+{
+  "name": "sendtowall",
+  "version": "1.0.0",
+  "description": "https://x.com/thedarshakrana/article/2037199903248855072",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbcladwell/sendtowall.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mbcladwell/sendtowall/issues"
+  },
+  "homepage": "https://github.com/mbcladwell/sendtowall#readme",
+  "dependencies": {
+    "puppeteer": "^24.40.0"
+  }
+}
