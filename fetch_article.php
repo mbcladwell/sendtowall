@@ -6,8 +6,15 @@
  * then redirects the browser to the public URL.
  */
 
-$PUBLIC_URL = 'https://labsolns.com/twittart/myarticle.html';
-$OUT_FILE   = __DIR__ . '/myarticle.html';
+$BASE_URL   = 'https://labsolns.com/twittart';
+$dirName    = bin2hex(random_bytes(4)); // 8 random hex chars
+$OUT_DIR    = __DIR__ . '/' . $dirName;
+$OUT_FILE   = $OUT_DIR . '/myarticle.html';
+$PUBLIC_URL = $BASE_URL . '/' . $dirName . '/myarticle.html';
+
+if (!mkdir($OUT_DIR, 0755)) {
+    die(errorPage('Failed to create output directory.'));
+}
 
 // ── Input validation ──────────────────────────────────────────
 $url = trim($_POST['url'] ?? '');
@@ -30,7 +37,10 @@ curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_TIMEOUT        => 30,
-    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+    CURLOPT_HTTPHEADER     => [
+        'Accept: application/json',
+        'X-With-Images-Summary: all',
+    ],
     CURLOPT_USERAGENT      => 'Mozilla/5.0',
 ]);
 $response = curl_exec($ch);
@@ -66,7 +76,96 @@ if (empty($markdown)) {
     die(errorPage('Article body is empty. The page may require login.'));
 }
 
-// ── Convert markdown to HTML ──────────────────────────────────
+// ── Download article images ───────────────────────────────────
+// Only download actual article media (pbs.twimg.com/media/),
+// skipping profile pics and emoji.
+
+function isArticleImage(string $url): bool
+{
+    return (bool) preg_match('#pbs\.twimg\.com/media/#i', $url);
+}
+
+// Upgrade a small/thumb URL to 900x900 by replacing name= param
+function upgradeImageUrl(string $url): string
+{
+    return preg_replace('/([?&]name=)[^&]+/', '$1900x900', $url);
+}
+
+function downloadImage(string $url, string $destDir): ?string
+{
+    $parsed   = parse_url($url);
+    $base     = basename($parsed['path'] ?? 'image');
+    $ext      = '';
+    if (!empty($parsed['query'])) {
+        parse_str($parsed['query'], $q);
+        if (!empty($q['format'])) $ext = '.' . $q['format'];
+    }
+    if ($ext === '' && !preg_match('/\.\w{2,4}$/', $base)) $ext = '.jpg';
+    $filename = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $base) . $ext;
+    $dest     = $destDir . '/' . $filename;
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0',
+    ]);
+    $data = curl_exec($ch);
+    $ok   = curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
+    curl_close($ch);
+
+    if ($ok && $data && file_put_contents($dest, $data) !== false) {
+        return $filename;
+    }
+    return null;
+}
+
+// Build map: original_inline_url => local_filename
+// Also collect alt texts so we can rewrite linked-image syntax
+$imageMap = []; // inline_url => local_filename
+
+// 1. Collect all inline image URLs from markdown
+//    Handles both  ![alt](url)  and  [![alt](url)](link)
+preg_match_all('/!\[([^\]]*)\]\(([^)]+)\)/', $markdown, $inlineImgs, PREG_SET_ORDER);
+
+foreach ($inlineImgs as $m) {
+    $inlineUrl = $m[2];
+    if (!isArticleImage($inlineUrl) || isset($imageMap[$inlineUrl])) continue;
+    // Try to download a higher-res version first
+    $hiResUrl = upgradeImageUrl($inlineUrl);
+    $local    = downloadImage($hiResUrl, $OUT_DIR)
+             ?? downloadImage($inlineUrl, $OUT_DIR);
+    if ($local) $imageMap[$inlineUrl] = $local;
+}
+
+// 2. Also grab any images key entries not already captured inline
+foreach (($data['data']['images'] ?? []) as $label => $imgUrl) {
+    if (!isArticleImage($imgUrl) || isset($imageMap[$imgUrl])) continue;
+    $local = downloadImage($imgUrl, $OUT_DIR);
+    if ($local) $imageMap[$imgUrl] = $local;
+}
+
+// Rewrite markdown:
+// [![alt](img_url)](link_url)  →  ![alt](local_file)   (drop outer link)
+// ![alt](img_url)              →  ![alt](local_file)
+$markdown = preg_replace_callback(
+    '/\[!\[([^\]]*)\]\(([^)]+)\)\]\([^)]+\)/',   // linked image
+    function ($m) use ($imageMap) {
+        $alt   = $m[1];
+        $url   = $m[2];
+        $local = $imageMap[$url] ?? $url;
+        return '![' . $alt . '](' . $local . ')';
+    },
+    $markdown
+);
+foreach ($imageMap as $origUrl => $localFile) {
+    // plain inline images not already rewritten above
+    $markdown = str_replace("({$origUrl})", "({$localFile})", $markdown);
+}
+
+
+
 function markdownToHtml(string $md): string
 {
     // Remove the leading # title line (shown separately in <h1>)
@@ -138,6 +237,21 @@ function markdownToHtml(string $md): string
 
 function inline(string $s): string
 {
+    // Images must be handled before escaping
+    // Extract image tokens first, replace with placeholders
+    $images = [];
+    $s = preg_replace_callback(
+        '/!\[([^\]]*)\]\(([^)]+)\)/',
+        function ($m) use (&$images) {
+            $token = "\x00IMG" . count($images) . "\x00";
+            $alt   = htmlspecialchars($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $src   = htmlspecialchars($m[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $images[$token] = "<img src=\"{$src}\" alt=\"{$alt}\" style=\"max-width:100%;height:auto;display:block;margin:1em 0\">";
+            return $token;
+        },
+        $s
+    );
+
     $s = htmlspecialchars($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $s = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $s);
     $s = preg_replace('/\*(.+?)\*/',     '<em>$1</em>',         $s);
@@ -147,6 +261,11 @@ function inline(string $s): string
         '<a href="$2" target="_blank" rel="noopener">$1</a>',
         $s
     );
+
+    // Restore image tags
+    foreach ($images as $token => $tag) {
+        $s = str_replace(htmlspecialchars($token, ENT_QUOTES | ENT_HTML5, 'UTF-8'), $tag, $s);
+    }
     return $s;
 }
 

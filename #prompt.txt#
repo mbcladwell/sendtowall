@@ -1,0 +1,7 @@
+write a php script that accepts a twitter article url, extracts the content from the article and creates an html file named "myarticle.html". An example of such an article can be found at https://x.com/thedarshakrana/article/2037199903248855072. Use the first 5 words of the article title concatenated using underscore character to serve as the html <title>. Tag the content so that each line is no longer than 36 characters. use scp to transfer this html file to /home/labsmaee/public_html/wallabag/web/uploads. open a web page to https://labsolns.com/wallabag/web/uploads/myarticle.html.
+
+
+Instead of sending the html file directly to the browser, create an html file named "myarticle.html" and save to the working directory on the server. open a web page to https://labsolns.com/lnsDFoKytr/twittart/myarticle.html
+
+
+Modify fetch_article.php so that when it pulls down the X article it also retrieves all associated images and deposits them in the newly created directory. Generate the proper urls in myarticle.html. An example of an X article with images is found here: https://x.com/lifemaxxjourney/article/2038225175376765026
