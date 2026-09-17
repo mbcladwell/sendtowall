@@ -25,35 +25,62 @@ if (empty($url)) {
 if (!filter_var($url, FILTER_VALIDATE_URL)) {
     die(errorPage('Invalid URL.'));
 }
-if (!preg_match('#^https?://(x\.com|twitter\.com)/.+/article/#i', $url)) {
+if (!preg_match('#^https?://(www\.)?(x\.com|twitter\.com)/#i', $url)) {
     die(errorPage('URL must be an x.com or twitter.com article link.'));
 }
 
 // ── Fetch via Jina Reader ─────────────────────────────────────
 $jinaUrl = 'https://r.jina.ai/' . $url;
 
+// Optional: set JINA_API_KEY env var (or define it here) to bypass
+// anonymous rate limits on x.com.  Free keys: https://jina.ai/reader/
+$jinaKey = getenv('JINA_API_KEY') ?: (defined('JINA_API_KEY') ? JINA_API_KEY : 'jina_367499f90f054218a8c7e874cbb067b4Eq6fclxi-6pIUMyQLiy0P4xRDpLY');
+
+$headers = [
+    'Accept: application/json',
+    'X-With-Images-Summary: all',
+];
+if ($jinaKey !== '') {
+    $headers[] = 'Authorization: Bearer ' . $jinaKey;
+}
+
 $ch = curl_init($jinaUrl);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_FOLLOWLOCATION => true,
     CURLOPT_TIMEOUT        => 30,
-    CURLOPT_HTTPHEADER     => [
-        'Accept: application/json',
-        'X-With-Images-Summary: all',
-    ],
+    CURLOPT_HTTPHEADER     => $headers,
     CURLOPT_USERAGENT      => 'Mozilla/5.0',
 ]);
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
-if (!$response || $httpCode !== 200) {
+if (!$response) {
     die(errorPage("Jina Reader request failed (HTTP $httpCode)."));
 }
 
+// Strip unpaired UTF-16 surrogates that break json_decode.
+// Jina sometimes corrupts emoji surrogate pairs by injecting \\__ between
+// the high and low surrogate halves (e.g. \ud83d\\__\udd14 for 🔔).
+// Fix: remove the \\__ separator so the pair can be decoded, then strip
+// any remaining lone surrogates.
+$response = preg_replace('/\\\\u([dD][89aAbB][0-9a-fA-F]{2})\\\\__\\\\u([dD][cCdDeEfF][0-9a-fA-F]{2})/', '\\\\u$1\\\\u$2', $response);
+$response = preg_replace('/\\\\u[dD][0-9a-fA-F]{3}/', '', $response);
+
 $data = json_decode($response, true);
-if (!$data || ($data['code'] ?? 0) !== 200) {
-    die(errorPage('Could not parse Jina Reader response.'));
+
+if ($data === null) {
+    die(errorPage('Could not parse Jina Reader response (JSON error: ' . json_last_error_msg() . ').'));
+}
+
+$dataCode = (int)($data['code'] ?? 0);
+
+if ($dataCode !== 200) {
+    // Surface Jina's own readable message when available
+    $jinaMsg = $data['readableMessage'] ?? ($data['message'] ?? '');
+    $detail  = $jinaMsg !== '' ? " — $jinaMsg" : " (HTTP $httpCode)";
+    die(errorPage("Jina Reader could not fetch the article$detail"));
 }
 
 $rawTitle = trim($data['data']['title']   ?? '');

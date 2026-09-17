@@ -5,3 +5,16 @@ Instead of sending the html file directly to the browser, create an html file na
 
 
 Modify fetch_article.php so that when it pulls down the X article it also retrieves all associated images and deposits them in the newly created directory. Generate the proper urls in myarticle.html. An example of an X article with images is found here: https://x.com/lifemaxxjourney/article/2038225175376765026
+
+
+Instead of an html that I have to paste the URL inot, generate a Firefox bookmak button code snippet that I can add to the bookmark which will grap the current URL and submit to fetch_article.php. Show me the snippet I need to the bookmark menu bar button
+
+javascript:(function(){var u=location.href;if(!u.match(/^https?:\/\/(www\.)?(x\.com|twitter\.com)\//)){alert('Not an X.com page');return;}var f=document.createElement('form');f.method='POST';f.action='https://labsolns.com/twittart/fetch_article.php';var i=document.createElement('input');i.type='hidden';i.name='url';i.value=u;f.appendChild(i);document.body.appendChild(f);f.submit();})();
+javascript:(function(){var u=location.href;if(!u.match(/^https?:\/\/(www\.)?(x\.com|twitter\.com)\//)){alert('Not an X.com page');return;}var w=window.open('about:blank','_blank');var d=w.document;var f=d.createElement('form');f.method='POST';f.action='https://labsolns.com/twittart/fetch_article.php';var i=d.createElement('input');i.type='hidden';i.name='url';i.value=u;f.appendChild(i);d.body.appendChild(f);f.submit();})();
+javascript:location.href='https://labsolns.com/twittart/redirect.php?url='+encodeURIComponent(location.href);
+
+
+create a similar workflow for Wall Street Journal articles as exists for X articles. WSJ requires a login so the article will need to be retrieved from the browser locally while logged in. Create the remote page similar to the requirements for an X article, and present in the browser. Valid login credentials can be supplied for testing. As an example use the article at https://www.wsj.com/tech/ai/jacob-coxon-quit-anthropic-ai-safety-3f4e877c?mod=hp_lead_pos7
+
+javascript:(function(){if(!location.hostname.match(/\bwsj\.com$/i)){alert('Not a WSJ page');return;}var h1=document.querySelector('h1[data-testid="headline"]')||document.querySelector('h1');var title=h1?h1.innerText.trim():document.title;var art=document.querySelector('article')||document.querySelector('[class*="AuthoringContent"]')||document.querySelector('main')||document.body;var pc=art.querySelectorAll('[data-type="paragraph"]').length;if(pc===0){var pp=art.querySelectorAll('p'),tc=0;for(var i=0;i<pp.length;i++){if(pp[i].innerText.trim().length>40)tc++;}if(tc<2){alert('No article text found.\nAre you logged in to WSJ?');return;}}function sj(v){return JSON.stringify(v).replace(/<\/script/gi,'<\\/script');}var w=window.open('','_blank');var d=w.document;d.open();d.write('<!DOCTYPE html><html><body><form id="f" method="POST" action="https://labsolns.com/twittart/wsj_relay.php"><textarea name="html"></textarea><input id="t" type="hidden" name="title"><input id="u" type="hidden" name="url"></form><scr'+'ipt>document.getElementById("t").value='+sj(title)+';document.getElementById("u").value='+sj(location.href)+';document.querySelector("textarea").value='+sj(art.outerHTML)+';document.getElementById("f").submit();<\/scr'+'ipt></body></html>');d.close();})();
+
